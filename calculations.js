@@ -39,7 +39,7 @@ function calculateSurfaceTemperatures(latitude, forecastHigh, forecastLow) {
     const Rs_max = GSC * E0 * Math.sin(alpha);
     
     // 雲遮係數相關計算
-    const delta_T_max = 0.003 * Rs_max + 6;
+    const delta_T_max = 0.00003 * Rs_max + 6;
     const delta_T_observed = forecastHigh - forecastLow;
     const cloudCoefficient = delta_T_observed / delta_T_max; // 雲遮係數
 
