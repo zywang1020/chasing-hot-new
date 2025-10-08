@@ -35,7 +35,7 @@ function calculateSurfaceTemperatures(latitude, forecastHigh, forecastLow) {
     const alpha = toRadians(90) - Math.abs(phi - delta);
 
     // 公式3: 計算理論最大太陽輻射量 (Rs_max)
-    const E0 = 1 + 0.033 * Math.cos(toRadians(360 * n / 365));
+    const E0 = 1 + 0.005 * Math.cos(toRadians(360 * n / 365));
     const Rs_max = GSC * E0 * Math.sin(alpha);
     
     // 雲遮係數相關計算
