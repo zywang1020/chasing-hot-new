@@ -1,106 +1,66 @@
-// script.js (計算各鋪面溫度 - 穩定版)
+// script.js (最鄰近分析最終版 - 已除錯)
 
 // --- 1. 初始化 & 事件監聽 ---
 const detectButton = document.getElementById('detect-button');
 const statusMessage = document.getElementById('status-message');
 const resultsContainer = document.getElementById('results-container');
-const loader = document.getElementById('loader');
 
 detectButton.addEventListener('click', () => {
-    loader.classList.remove('hidden');
     statusMessage.textContent = '正在獲取您的位置...';
-    resultsContainer.classList.add('hidden');
+    resultsContainer.classList.add('hidden'); // 隱藏舊結果
     navigator.geolocation.getCurrentPosition(geolocationSuccess, geolocationError);
 });
 
-// --- 2. 地理定位成功後的主要流程 ---
+// --- 2. 地理定位 ---
 async function geolocationSuccess(position) {
     const { latitude, longitude } = position.coords;
-    statusMessage.textContent = `位置獲取成功 (${latitude.toFixed(4)}, ${longitude.toFixed(4)})。`;
+    statusMessage.textContent = `位置獲取成功 (${latitude.toFixed(4)}, ${longitude.toFixed(4)})。正在尋找最近的氣象站...`;
     
     try {
-        // --- Plan A: 優先嘗試直接用使用者位置取得預報 ---
-        statusMessage.textContent = '正在嘗試直接獲取您的區域預報... (Plan A)';
-        const weatherData = await fetchForecastData(latitude, longitude);
-
-        // 如果 Plan A 成功，直接計算並顯示結果
-        processAndDisplay(latitude, weatherData, "您的區域");
+        const nearestStationData = await fetchNearestStationData(latitude, longitude);
+        displayResults(nearestStationData);
+        statusMessage.textContent = `成功找到最近的氣象站！`;
 
     } catch (error) {
-        // --- Plan B: 如果 Plan A 失敗，啟動備用計畫 ---
-        console.warn("Plan A failed:", error.message, "Activating Plan B.");
-        statusMessage.textContent = '區域預報獲取失敗，啟動備用計畫... (Plan B)';
-        
-        try {
-            // 步驟 B-1: 找到最近的氣象站
-            statusMessage.textContent = '正在尋找最近的氣象站...';
-            const nearestStation = await findNearestStation(latitude, longitude);
-
-            // 步驟 B-2: 用氣象站的位置重新獲取預報
-            statusMessage.textContent = `找到氣象站：${nearestStation.name}。正在重新獲取預報...`;
-            const weatherDataFromStation = await fetchForecastData(nearestStation.lat, nearestStation.lon);
-
-            // 如果 Plan B 成功，計算並顯示結果
-            processAndDisplay(nearestStation.lat, weatherDataFromStation, nearestStation.name);
-
-        } catch (finalError) {
-            statusMessage.textContent = `錯誤：備用計畫也無法取得預報資料。(${finalError.message})`;
-        }
-    } finally {
-        loader.classList.add('hidden');
+        statusMessage.textContent = `錯誤：${error.message}`;
     }
 }
 
-// 獲取位置失敗的處理
 function geolocationError(error) {
     statusMessage.textContent = `無法獲取您的位置：${error.message}`;
-    loader.classList.add('hidden');
 }
 
-// --- 核心功能區 ---
-
-// 功能 A: 用指定經緯度取得「預報」資料 (最高溫/最低溫)
-async function fetchForecastData(lat, lon) {
+// --- 3. 核心功能：抓取全台站點資料並找到最近的站點 ---
+async function fetchNearestStationData(userLat, userLon) {
     const CWA_API_KEY = 'CWA-234F005B-7959-436C-A0FF-BD4225C0E339';
-    const API_URL = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-091?Authorization=${CWA_API_KEY}&limit=1&format=JSON&geocode=${lon},${lat}`;
-    
-    const response = await fetch(API_URL);
-    if (!response.ok) throw new Error('API請求失敗');
-    const data = await response.json();
-
-    if (!data.records || !data.records.locations || data.records.locations.length === 0 || !data.records.locations[0].location || data.records.locations[0].location.length === 0) {
-        throw new Error('此位置不在鄉鎮預報範圍內');
-    }
-    
-    const tempElements = data.records.locations[0].location[0].weatherElement;
-    const maxT = parseFloat(tempElements.find(el => el.elementName === 'MaxT').time[0].elementValue[0].value);
-    const minT = parseFloat(tempElements.find(el => el.elementName === 'MinT').time[0].elementValue[0].value);
-
-    if (isNaN(maxT) || isNaN(minT)) throw new Error('預報資料格式不符');
-    
-    return { maxT, minT };
-}
-
-// 功能 B: 找到最近的氣象站 (回傳名稱與經緯度)
-async function findNearestStation(userLat, userLon) {
-    const CWA_API_KEY = 'CWA-234F005B-7959-436C-A0FF-BD4225C0E339';
+    // 使用「自動氣象站-觀測資料」API，一次取得所有站點的觀測資料
     const API_URL = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0001-001?Authorization=${CWA_API_KEY}`;
     
+    statusMessage.textContent = '正在下載全台氣象站資料...';
     const response = await fetch(API_URL);
-    if (!response.ok) throw new Error('無法獲取站點列表');
+    if (!response.ok) {
+        throw new Error('無法從氣象署獲取站點列表。');
+    }
     const data = await response.json();
 
     if (!data.records || !data.records.Station || data.records.Station.length === 0) {
-        throw new Error('無法取得氣象站列表');
+        throw new Error('無法取得氣象站列表資料。');
     }
+    
+    statusMessage.textContent = '正在進行最鄰近分析...';
     
     let closestStation = null;
     let minDistance = Infinity;
 
     data.records.Station.forEach(station => {
+        // --- 已修正 ---
+        // 直接讀取正確的經緯度
         const stationLon = parseFloat(station.GeoInfo.Coordinates[0].StationLongitude);
         const stationLat = parseFloat(station.GeoInfo.Coordinates[0].StationLatitude);
+
+        // 進行距離計算
         const distance = getDistance(userLat, userLon, stationLat, stationLon);
+
         if (distance < minDistance) {
             minDistance = distance;
             closestStation = station;
@@ -109,77 +69,39 @@ async function findNearestStation(userLat, userLon) {
 
     if (closestStation) {
         return {
-            name: closestStation.StationName,
-            lat: parseFloat(closestStation.GeoInfo.Coordinates[0].StationLatitude),
-            lon: parseFloat(closestStation.GeoInfo.Coordinates[0].StationLongitude)
+            stationName: closestStation.StationName,
+            town: closestStation.GeoInfo.TownName,
+            distance: minDistance.toFixed(2), // 距離，單位公里
+            temperature: closestStation.WeatherElement.AirTemperature,
+            humidity: closestStation.WeatherElement.RelativeHumidity
         };
     } else {
-        throw new Error('找不到任何氣象站');
+        throw new Error('找不到任何氣象站。');
     }
 }
 
-// 功能 C: 執行物理公式計算
-function calculateSurfaceTemperatures(latitude, forecastHigh, forecastLow) {
-    const GSC = 1367; // 太陽常數 W/m^2
-    const SIGMA = 5.67e-8; // 史蒂芬-波茲曼常數 W/m^2K^4
-
-    const pavements = [
-        { name: '柏油 (Asphalt)', albedo: 0.075 },
-        { name: '水泥 (Concrete)', albedo: 0.395 },
-        { name: '草地 (Grass)', albedo: 0.275 },
-        { name: 'PU跑道 (PU Track)', albedo: 0.125 }
-    ];
-
-    const toRadians = (deg) => deg * Math.PI / 180;
-    const today = new Date();
-    const startOfYear = new Date(today.getFullYear(), 0, 0);
-    const n = Math.floor((today - startOfYear) / (1000 * 60 * 60 * 24));
-
-    const delta = toRadians(23.45) * Math.sin(toRadians((360 / 365) * (n - 81)));
-    const phi = toRadians(latitude);
-    const alpha = toRadians(90) - Math.abs(phi - delta);
-    const E0 = 1 + 0.033 * Math.cos(toRadians(360 * n / 365));
-    const Rs_max = GSC * E0 * Math.sin(alpha);
-    const delta_T_max = 0.3 * Rs_max + 6;
-    const delta_T_observed = forecastHigh - forecastLow;
-    const cloudCoefficient = delta_T_observed / delta_T_max;
-    const Rs_observed = Rs_max * cloudCoefficient;
-    
-    return pavements.map(pavement => {
-        const emissivity = 1 - pavement.albedo;
-        const T_kelvin = Math.pow((emissivity * Rs_observed) / SIGMA, 0.25);
-        const T_celsius = T_kelvin - 273.15;
-        return {
-            name: pavement.name,
-            temperature: T_celsius.toFixed(1)
-        };
-    });
-}
-
-// --- 工具區 ---
-
-// 工具 A: 計算距離
+// --- 4. 數學工具：計算兩個經緯度之間的距離（哈佛森公式）---
 function getDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371;
+    const R = 6371; // 地球半徑（公里）
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 0.5 - Math.cos(dLat) / 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * (1 - Math.cos(dLon)) / 2;
+    const a =
+        0.5 - Math.cos(dLat) / 2 +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        (1 - Math.cos(dLon)) / 2;
     return R * 2 * Math.asin(Math.sqrt(a));
 }
 
-// 工具 B: 處理資料並顯示結果
-function processAndDisplay(latitude, weatherData, dataSourceName) {
-    const surfaceTemperatures = calculateSurfaceTemperatures(latitude, weatherData.maxT, weatherData.minT);
-    let resultsHTML = `
-        <h3>估算表面溫度 (基於 ${dataSourceName} 預報)</h3>
+// --- 5. 顯示結果 ---
+function displayResults(data) {
+    resultsContainer.innerHTML = `
+        <h3>最近的氣象站資料</h3>
         <ul>
+            <li><strong>站點名稱：</strong> ${data.stationName} (${data.town})</li>
+            <li><strong>與您距離：</strong> 約 ${data.distance} 公里</li>
+            <li><strong>目前氣溫：</strong> ${data.temperature} °C</li>
+            <li><strong>相對濕度：</strong> ${data.humidity} %</li>
+        </ul>
     `;
-    surfaceTemperatures.forEach(pavement => {
-        resultsHTML += `<li><strong>${pavement.name}：</strong> ${pavement.temperature} °C</li>`;
-    });
-    resultsHTML += `</ul>`;
-    
-    resultsContainer.innerHTML = resultsHTML;
     resultsContainer.classList.remove('hidden');
-    statusMessage.textContent = `計算完成！(資料來源：${dataSourceName} 預報)`;
 }
