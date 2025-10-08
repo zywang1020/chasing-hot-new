@@ -1,4 +1,4 @@
-// script.js (最鄰近分析最終版)
+// script.js (最鄰近分析最終版 - 已除錯)
 
 // --- 1. 初始化 & 事件監聽 ---
 const detectButton = document.getElementById('detect-button');
@@ -53,11 +53,13 @@ async function fetchNearestStationData(userLat, userLon) {
     let minDistance = Infinity;
 
     data.records.Station.forEach(station => {
-        const stationLat = parseFloat(station.ObsTime.DateTime);
+        // --- 已修正 ---
+        // 直接讀取正確的經緯度
         const stationLon = parseFloat(station.GeoInfo.Coordinates[0].StationLongitude);
-        const stationLat2 = parseFloat(station.GeoInfo.Coordinates[0].StationLatitude);
+        const stationLat = parseFloat(station.GeoInfo.Coordinates[0].StationLatitude);
 
-        const distance = getDistance(userLat, userLon, stationLat2, stationLon);
+        // 進行距離計算
+        const distance = getDistance(userLat, userLon, stationLat, stationLon);
 
         if (distance < minDistance) {
             minDistance = distance;
