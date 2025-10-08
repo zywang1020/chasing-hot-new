@@ -1,4 +1,4 @@
-// script.js (最終融合版：精準定位 + 縣市預報 + 公式計算)
+// script.js (最終除錯版：修正 CountyName 欄位)
 
 // --- 1. 初始化 & 事件監聽 ---
 const detectButton = document.getElementById('detect-button');
@@ -29,9 +29,9 @@ async function geolocationSuccess(position) {
 
         // 步驟三：代入公式計算鋪面溫度
         statusMessage.textContent = '預報獲取完畢，正在計算表面溫度...';
-        const surfaceTemperatures = calculateSurfaceTemperatures(nearestStation.lat, weatherData.maxT, weatherData.minT);
         
-        displayResults(surfaceTemperatures, nearestStation.name, nearestStation.city);
+        // 直接呼叫 processAndDisplay 來處理後續
+        processAndDisplay(nearestStation.lat, weatherData, nearestStation.name, nearestStation.city);
 
     } catch (error) {
         statusMessage.textContent = `錯誤：${error.message}`;
