@@ -5,18 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>熱感偵探 (Chasing Hot)</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <header>
-        <h1>熱感偵探 (Chasing Hot)</h1>
-        <p>根據您目前的位置，估算不同地表鋪面在陽光下的實際溫度，<br>以預防戶外活動與工作時的熱傷害風險。</p>
-    </header>
-    <main>
-        <button id="detect-button">開始偵測目前位置溫度</button>
-        <div id="status-message"></div>
-        <div id="results-container" class="hidden">
-            </div>
-    </main>
+
+    <div class="container">
+        <header>
+            <h1>☀️ 熱感偵探</h1>
+            <p>即時分析您所在位置，尋找最近的氣象站，<br>提供最準確的現場觀測資料。</p>
+        </header>
+        
+        <main>
+            <button id="detect-button">尋找最近的氣象站</button>
+            <div id="loader" class="hidden"></div>
+            <div id="status-message"></div>
+            <div id="results-container" class="hidden">
+                </div>
+        </main>
+    </div>
+
+    <footer>
+        <p>&copy; 2025 Chasing Hot Project</p>
+    </footer>
+
     <script src="script.js"></script>
 </body>
 </html>
