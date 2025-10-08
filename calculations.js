@@ -1,14 +1,13 @@
-// calculations.js (最終科學化校正版)
+// calculations.js (最終校驗版)
 
 function calculateSurfaceTemperatures(latitude, forecastHigh, forecastLow) {
     // --- 物理常數 ---
     const GSC = 1367; // 太陽常數 W/m^2
     const SIGMA = 5.67e-8; // 史蒂芬-波茲曼常數 W/m^2K^4
 
-    // --- 鋪面反照率資料 (使用具科學根據的參數) ---
+    // --- 鋪面反照率資料 (使用符合體感的參數) ---
     const pavements = [
         { name: '柏油 (Asphalt)', albedo: 0.075 },
-        // 使用 0.25 代表更常見的「風化後都市水泥」
         { name: '水泥 (Concrete)', albedo: 0.25 },
         { name: '草地 (Grass)', albedo: 0.275 },
         { name: 'PU跑道 (PU Track)', albedo: 0.125 }
