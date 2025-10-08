@@ -1,4 +1,4 @@
-// script.js (應用程式主要邏輯 - 簡化版)
+// script.js (最終融合版：精準定位 + 縣市預報 + 公式計算)
 
 // --- 1. 初始化 & 事件監聽 ---
 const detectButton = document.getElementById('detect-button');
@@ -19,25 +19,22 @@ async function geolocationSuccess(position) {
     statusMessage.textContent = `位置獲取成功 (${latitude.toFixed(4)}, ${longitude.toFixed(4)})。`;
     
     try {
-        // Plan A: 優先嘗試直接用使用者位置取得預報
-        statusMessage.textContent = '正在嘗試直接獲取您的區域預報... (Plan A)';
-        const weatherData = await fetchForecastData(latitude, longitude);
-        processAndDisplay(latitude, weatherData, "您的區域");
+        // 步驟一：找到最近的氣象站，取得其緯度和所在縣市
+        statusMessage.textContent = '正在尋找最近的氣象站...';
+        const nearestStation = await findNearestStation(latitude, longitude);
+
+        // 步驟二：用縣市名稱取得可靠的「縣市預報」資料
+        statusMessage.textContent = `找到氣象站：${nearestStation.name}。正在擷取 ${nearestStation.city} 的預報...`;
+        const weatherData = await fetchCityForecastData(nearestStation.city);
+
+        // 步驟三：代入公式計算鋪面溫度
+        statusMessage.textContent = '預報獲取完畢，正在計算表面溫度...';
+        const surfaceTemperatures = calculateSurfaceTemperatures(nearestStation.lat, weatherData.maxT, weatherData.minT);
+        
+        displayResults(surfaceTemperatures, nearestStation.name, nearestStation.city);
 
     } catch (error) {
-        // Plan B: 如果 Plan A 失敗，啟動備用計畫
-        console.warn("Plan A failed:", error.message, "Activating Plan B.");
-        statusMessage.textContent = '區域預報獲取失敗，啟動備用計畫... (Plan B)';
-        
-        try {
-            const nearestStation = await findNearestStation(latitude, longitude);
-            statusMessage.textContent = `找到氣象站：${nearestStation.name}。正在重新獲取預報...`;
-            const weatherDataFromStation = await fetchForecastData(nearestStation.lat, nearestStation.lon);
-            processAndDisplay(nearestStation.lat, weatherDataFromStation, nearestStation.name);
-
-        } catch (finalError) {
-            statusMessage.textContent = `錯誤：備用計畫也無法取得預報資料。(${finalError.message})`;
-        }
+        statusMessage.textContent = `錯誤：${error.message}`;
     } finally {
         loader.classList.add('hidden');
     }
@@ -51,29 +48,7 @@ function geolocationError(error) {
 
 // --- 核心功能區 ---
 
-// 功能 A: 用指定經緯度取得「預報」資料
-async function fetchForecastData(lat, lon) {
-    const CWA_API_KEY = 'CWA-234F005B-7959-436C-A0FF-BD4225C0E339';
-    const API_URL = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-091?Authorization=${CWA_API_KEY}&limit=1&format=JSON&geocode=${lon},${lat}`;
-    
-    const response = await fetch(API_URL);
-    if (!response.ok) throw new Error('API請求失敗');
-    const data = await response.json();
-
-    if (!data.records || !data.records.locations || data.records.locations.length === 0 || !data.records.locations[0].location || data.records.locations[0].location.length === 0) {
-        throw new Error('此位置不在鄉鎮預報範圍內');
-    }
-    
-    const tempElements = data.records.locations[0].location[0].weatherElement;
-    const maxT = parseFloat(tempElements.find(el => el.elementName === 'MaxT').time[0].elementValue[0].value);
-    const minT = parseFloat(tempElements.find(el => el.elementName === 'MinT').time[0].elementValue[0].value);
-
-    if (isNaN(maxT) || isNaN(minT)) throw new Error('預報資料格式不符');
-    
-    return { maxT, minT };
-}
-
-// 功能 B: 找到最近的氣象站
+// 功能 A: 找到最近的氣象站 (回傳名稱、緯度、縣市)
 async function findNearestStation(userLat, userLon) {
     const CWA_API_KEY = 'CWA-234F005B-7959-436C-A0FF-BD4225C0E339';
     const API_URL = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0001-001?Authorization=${CWA_API_KEY}`;
@@ -103,11 +78,43 @@ async function findNearestStation(userLat, userLon) {
         return {
             name: closestStation.StationName,
             lat: parseFloat(closestStation.GeoInfo.Coordinates[0].StationLatitude),
-            lon: parseFloat(closestStation.GeoInfo.Coordinates[0].StationLongitude)
+            city: closestStation.GeoInfo.CityName
         };
     } else {
         throw new Error('找不到任何氣象站');
     }
+}
+
+// 功能 B: 用「縣市名稱」取得可靠的「預報」資料
+async function fetchCityForecastData(cityName) {
+    const CWA_API_KEY = 'CWA-234F005B-7959-436C-A0FF-BD4225C0E339';
+    // 使用「一般天氣預報-今明36小時天氣預報」API
+    const API_URL = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-001?Authorization=${CWA_API_KEY}&locationName=${encodeURI(cityName)}`;
+    
+    const response = await fetch(API_URL);
+    if (!response.ok) throw new Error('API請求失敗');
+    const data = await response.json();
+
+    if (!data.records || !data.records.location || data.records.location.length === 0) {
+        throw new Error(`找不到 ${cityName} 的縣市預報`);
+    }
+    
+    const weatherElements = data.records.location[0].weatherElement;
+    // 找到 MaxT (最高溫) 和 MinT (最低溫) 的元素
+    const maxTElement = weatherElements.find(el => el.elementName === 'MaxT');
+    const minTElement = weatherElements.find(el => el.elementName === 'MinT');
+
+    if (!maxTElement || !minTElement || maxTElement.time.length === 0 || minTElement.time.length === 0) {
+        throw new Error('預報資料中缺少最高溫或最低溫資訊');
+    }
+    
+    // 取第一筆時間的預報溫度即可
+    const maxT = parseFloat(maxTElement.time[0].parameter.parameterName);
+    const minT = parseFloat(minTElement.time[0].parameter.parameterName);
+
+    if (isNaN(maxT) || isNaN(minT)) throw new Error('預報資料格式不符');
+    
+    return { maxT, minT };
 }
 
 // --- 工具區 ---
@@ -122,12 +129,12 @@ function getDistance(lat1, lon1, lat2, lon2) {
 }
 
 // 工具 B: 處理資料並顯示結果
-function processAndDisplay(latitude, weatherData, dataSourceName) {
-    // ***注意：這裡現在呼叫的是來自 calculations.js 的函式***
+function processAndDisplay(latitude, weatherData, stationName, cityName) {
+    // 呼叫來自 calculations.js 的函式進行物理運算
     const surfaceTemperatures = calculateSurfaceTemperatures(latitude, weatherData.maxT, weatherData.minT);
     
     let resultsHTML = `
-        <h3>估算表面溫度 (基於 ${dataSourceName} 預報)</h3>
+        <h3>估算表面溫度 (基於 ${cityName} 預報)</h3>
         <ul>
     `;
     surfaceTemperatures.forEach(pavement => {
@@ -137,5 +144,5 @@ function processAndDisplay(latitude, weatherData, dataSourceName) {
     
     resultsContainer.innerHTML = resultsHTML;
     resultsContainer.classList.remove('hidden');
-    statusMessage.textContent = `計算完成！(資料來源：${dataSourceName} 預報)`;
+    statusMessage.textContent = `計算完成！(資料來源：${stationName} 位置 / ${cityName} 預報)`;
 }
