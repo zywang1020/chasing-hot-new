@@ -1,4 +1,4 @@
-// script.js (最終融合版：精準定位 + 縣市預報 + 公式計算)
+// script.js (最終除錯版：修正 CountyName 欄位)
 
 // --- 1. 初始化 & 事件監聽 ---
 const detectButton = document.getElementById('detect-button');
@@ -78,7 +78,8 @@ async function findNearestStation(userLat, userLon) {
         return {
             name: closestStation.StationName,
             lat: parseFloat(closestStation.GeoInfo.Coordinates[0].StationLatitude),
-            city: closestStation.GeoInfo.CityName
+            // --- 修正處：將 CityName 改為 CountyName ---
+            city: closestStation.GeoInfo.CountyName
         };
     } else {
         throw new Error('找不到任何氣象站');
@@ -100,7 +101,6 @@ async function fetchCityForecastData(cityName) {
     }
     
     const weatherElements = data.records.location[0].weatherElement;
-    // 找到 MaxT (最高溫) 和 MinT (最低溫) 的元素
     const maxTElement = weatherElements.find(el => el.elementName === 'MaxT');
     const minTElement = weatherElements.find(el => el.elementName === 'MinT');
 
@@ -108,7 +108,6 @@ async function fetchCityForecastData(cityName) {
         throw new Error('預報資料中缺少最高溫或最低溫資訊');
     }
     
-    // 取第一筆時間的預報溫度即可
     const maxT = parseFloat(maxTElement.time[0].parameter.parameterName);
     const minT = parseFloat(minTElement.time[0].parameter.parameterName);
 
