@@ -1,4 +1,4 @@
-// script.js (最終除錯版：修正 CountyName 欄位)
+// script.js (最終融合版：精準定位 + 縣市預報 + 公式計算)
 
 // --- 1. 初始化 & 事件監聽 ---
 const detectButton = document.getElementById('detect-button');
@@ -78,7 +78,6 @@ async function findNearestStation(userLat, userLon) {
         return {
             name: closestStation.StationName,
             lat: parseFloat(closestStation.GeoInfo.Coordinates[0].StationLatitude),
-            // --- 修正處：將 CityName 改為 CountyName ---
             city: closestStation.GeoInfo.CountyName
         };
     } else {
