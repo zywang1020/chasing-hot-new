@@ -1,4 +1,4 @@
-// calculations.js (參數微調最終版)
+// calculations.js (科學模型已校正的最終版)
 
 /**
  * 根據氣象預報資料和地理位置，計算不同鋪面的表面溫度。
@@ -12,10 +12,10 @@ function calculateSurfaceTemperatures(latitude, forecastHigh, forecastLow) {
     const GSC = 1367; // 太陽常數 W/m^2
     const SIGMA = 5.67e-8; // 史蒂芬-波茲曼常數 W/m^2K^4
 
-    // --- 鋪面反照率資料 (微調後) ---
+    // --- 鋪面反照率資料 ---
     const pavements = [
         { name: '柏油 (Asphalt)', albedo: 0.075 },
-        { name: '水泥 (Concrete)', albedo: 0.28 },
+        { name: '水泥 (Concrete)', albedo: 0.395 },
         { name: '草地 (Grass)', albedo: 0.275 },
         { name: 'PU跑道 (PU Track)', albedo: 0.125 }
     ];
@@ -30,19 +30,22 @@ function calculateSurfaceTemperatures(latitude, forecastHigh, forecastLow) {
     const phi = toRadians(latitude);
     const alpha = toRadians(90) - Math.abs(phi - delta);
     const E0 = 1 + 0.033 * Math.cos(toRadians(360 * n / 365));
-    const Rs_max = GSC * E0 * Math.sin(alpha);
+    const Rs_max = GSC * E0 * Math.sin(alpha); // 此處單位為 W/m²
     
-    // 單位校正過的經驗公式
+    // --- 雲遮係數相關計算 ---
+    // *** 關鍵修正：將係數從 0.3 校正為 0.005，以匹配 Rs_max 的單位 ***
     const delta_T_max = 0.005 * Rs_max + 6;
     const delta_T_observed = forecastHigh - forecastLow;
     
     let cloudCoefficient = delta_T_observed / delta_T_max;
+    // 增加保護機制，確保雲遮係數最大為 1 (晴天)
     if (cloudCoefficient > 1) {
         cloudCoefficient = 1;
     }
 
     const Rs_observed = Rs_max * cloudCoefficient;
     
+    // --- 公式5: 為每種鋪面計算表面溫度 ---
     return pavements.map(pavement => {
         const emissivity = 1 - pavement.albedo;
         const T_kelvin = Math.pow((emissivity * Rs_observed) / SIGMA, 0.25);
