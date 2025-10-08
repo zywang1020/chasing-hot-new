@@ -1,4 +1,4 @@
-// script.js (最終版：同時顯示計算值與觀測值)
+// script.js (最終除錯校驗版)
 
 // --- 1. 初始化 & 事件監聽 ---
 const detectButton = document.getElementById('detect-button');
@@ -27,12 +27,8 @@ async function geolocationSuccess(position) {
         statusMessage.textContent = `找到氣象站：${nearestStation.name}。正在擷取 ${nearestStation.city} 的預報...`;
         const weatherData = await fetchCityForecastData(nearestStation.city);
 
-        // 步驟三：代入公式計算鋪面溫度
-        statusMessage.textContent = '預報獲取完畢，正在計算表面溫度...';
-        const surfaceTemperatures = calculateSurfaceTemperatures(nearestStation.lat, weatherData.maxT, weatherData.minT);
-        
-        // 最終步驟：將「計算結果」和「觀測結果」一起顯示出來
-        displayAllResults(surfaceTemperatures, nearestStation);
+        // 步驟三：將「計算結果」和「觀測結果」一起顯示出來
+        displayAllResults(weatherData, nearestStation);
 
     } catch (error) {
         statusMessage.textContent = `錯誤：${error.message}`;
@@ -80,7 +76,6 @@ async function findNearestStation(userLat, userLon) {
             name: closestStation.StationName,
             lat: parseFloat(closestStation.GeoInfo.Coordinates[0].StationLatitude),
             city: closestStation.GeoInfo.CountyName,
-            // --- 新增：同時回傳觀測資料 ---
             distance: minDistance.toFixed(2),
             observedTemp: closestStation.WeatherElement.AirTemperature,
             observedHumidity: closestStation.WeatherElement.RelativeHumidity
@@ -130,10 +125,12 @@ function getDistance(lat1, lon1, lat2, lon2) {
     return R * 2 * Math.asin(Math.sqrt(a));
 }
 
-// 工具 B: 顯示所有結果 (包含計算值與觀測值)
-function displayAllResults(calculatedData, observedData) {
+// 工具 B: 顯示所有結果
+function displayAllResults(weatherData, stationData) {
+    const calculatedData = calculateSurfaceTemperatures(stationData.lat, weatherData.maxT, weatherData.minT);
+    
     let resultsHTML = `
-        <h3>估算表面溫度 (基於 ${observedData.city} 預報)</h3>
+        <h3>估算表面溫度 (基於 ${stationData.city} 預報)</h3>
         <ul>
     `;
     calculatedData.forEach(pavement => {
@@ -141,14 +138,13 @@ function displayAllResults(calculatedData, observedData) {
     });
     resultsHTML += `</ul>`;
     
-    // --- 新增：顯示觀測站的即時資料 ---
     resultsHTML += `
         <h3 style="margin-top: 25px;">最近的氣象站觀測資料</h3>
         <ul>
-            <li><strong>站點名稱：</strong> ${observedData.name}</li>
-            <li><strong>與您距離：</strong> 約 ${observedData.distance} 公里</li>
-            <li><strong>目前氣溫：</strong> ${observedData.observedTemp} °C</li>
-            <li><strong>相對濕度：</strong> ${observedData.observedHumidity} %</li>
+            <li><strong>站點名稱：</strong> ${stationData.name}</li>
+            <li><strong>與您距離：</strong> 約 ${stationData.distance} 公里</li>
+            <li><strong>目前氣溫：</strong> ${stationData.observedTemp} °C</li>
+            <li><strong>相對濕度：</strong> ${stationData.observedHumidity} %</li>
         </ul>
     `;
     
