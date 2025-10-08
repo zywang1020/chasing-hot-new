@@ -1,4 +1,4 @@
-// script.js (最終除錯版：修正 CountyName 欄位)
+// script.js (最終版：同時顯示計算值與觀測值)
 
 // --- 1. 初始化 & 事件監聽 ---
 const detectButton = document.getElementById('detect-button');
@@ -19,7 +19,7 @@ async function geolocationSuccess(position) {
     statusMessage.textContent = `位置獲取成功 (${latitude.toFixed(4)}, ${longitude.toFixed(4)})。`;
     
     try {
-        // 步驟一：找到最近的氣象站，取得其緯度和所在縣市
+        // 步驟一：找到最近的氣象站，取得所有觀測與位置資料
         statusMessage.textContent = '正在尋找最近的氣象站...';
         const nearestStation = await findNearestStation(latitude, longitude);
 
@@ -29,9 +29,10 @@ async function geolocationSuccess(position) {
 
         // 步驟三：代入公式計算鋪面溫度
         statusMessage.textContent = '預報獲取完畢，正在計算表面溫度...';
+        const surfaceTemperatures = calculateSurfaceTemperatures(nearestStation.lat, weatherData.maxT, weatherData.minT);
         
-        // 直接呼叫 processAndDisplay 來處理後續
-        processAndDisplay(nearestStation.lat, weatherData, nearestStation.name, nearestStation.city);
+        // 最終步驟：將「計算結果」和「觀測結果」一起顯示出來
+        displayAllResults(surfaceTemperatures, nearestStation);
 
     } catch (error) {
         statusMessage.textContent = `錯誤：${error.message}`;
@@ -48,7 +49,7 @@ function geolocationError(error) {
 
 // --- 核心功能區 ---
 
-// 功能 A: 找到最近的氣象站 (回傳名稱、緯度、縣市)
+// 功能 A: 找到最近的氣象站 (回傳所有需要的資料)
 async function findNearestStation(userLat, userLon) {
     const CWA_API_KEY = 'CWA-234F005B-7959-436C-A0FF-BD4225C0E339';
     const API_URL = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0001-001?Authorization=${CWA_API_KEY}`;
@@ -78,7 +79,11 @@ async function findNearestStation(userLat, userLon) {
         return {
             name: closestStation.StationName,
             lat: parseFloat(closestStation.GeoInfo.Coordinates[0].StationLatitude),
-            city: closestStation.GeoInfo.CountyName
+            city: closestStation.GeoInfo.CountyName,
+            // --- 新增：同時回傳觀測資料 ---
+            distance: minDistance.toFixed(2),
+            observedTemp: closestStation.WeatherElement.AirTemperature,
+            observedHumidity: closestStation.WeatherElement.RelativeHumidity
         };
     } else {
         throw new Error('找不到任何氣象站');
@@ -88,7 +93,6 @@ async function findNearestStation(userLat, userLon) {
 // 功能 B: 用「縣市名稱」取得可靠的「預報」資料
 async function fetchCityForecastData(cityName) {
     const CWA_API_KEY = 'CWA-234F005B-7959-436C-A0FF-BD4225C0E339';
-    // 使用「一般天氣預報-今明36小時天氣預報」API
     const API_URL = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-001?Authorization=${CWA_API_KEY}&locationName=${encodeURI(cityName)}`;
     
     const response = await fetch(API_URL);
@@ -126,21 +130,29 @@ function getDistance(lat1, lon1, lat2, lon2) {
     return R * 2 * Math.asin(Math.sqrt(a));
 }
 
-// 工具 B: 處理資料並顯示結果
-function processAndDisplay(latitude, weatherData, stationName, cityName) {
-    // 呼叫來自 calculations.js 的函式進行物理運算
-    const surfaceTemperatures = calculateSurfaceTemperatures(latitude, weatherData.maxT, weatherData.minT);
-    
+// 工具 B: 顯示所有結果 (包含計算值與觀測值)
+function displayAllResults(calculatedData, observedData) {
     let resultsHTML = `
-        <h3>估算表面溫度 (基於 ${cityName} 預報)</h3>
+        <h3>估算表面溫度 (基於 ${observedData.city} 預報)</h3>
         <ul>
     `;
-    surfaceTemperatures.forEach(pavement => {
+    calculatedData.forEach(pavement => {
         resultsHTML += `<li><strong>${pavement.name}：</strong> ${pavement.temperature} °C</li>`;
     });
     resultsHTML += `</ul>`;
     
+    // --- 新增：顯示觀測站的即時資料 ---
+    resultsHTML += `
+        <h3 style="margin-top: 25px;">最近的氣象站觀測資料</h3>
+        <ul>
+            <li><strong>站點名稱：</strong> ${observedData.name}</li>
+            <li><strong>與您距離：</strong> 約 ${observedData.distance} 公里</li>
+            <li><strong>目前氣溫：</strong> ${observedData.observedTemp} °C</li>
+            <li><strong>相對濕度：</strong> ${observedData.observedHumidity} %</li>
+        </ul>
+    `;
+    
     resultsContainer.innerHTML = resultsHTML;
     resultsContainer.classList.remove('hidden');
-    statusMessage.textContent = `計算完成！(資料來源：${stationName} 位置 / ${cityName} 預報)`;
+    statusMessage.textContent = `計算完成！`;
 }
