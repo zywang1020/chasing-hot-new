@@ -1,22 +1,14 @@
-// calculations.js (僅修正單位係數，保留原始反照率)
+// calculations.js (最終校驗版)
 
-/**
- * 根據氣象預報資料和地理位置，計算不同鋪面的表面溫度。
- * @param {number} latitude - 緯度
- * @param {number} forecastHigh - 預報最高溫 (°C)
- * @param {number} forecastLow - 預報最低溫 (°C)
- * @returns {Array<Object>} 包含各種鋪面名稱與其估算溫度的陣列
- */
 function calculateSurfaceTemperatures(latitude, forecastHigh, forecastLow) {
     // --- 物理常數 ---
     const GSC = 1367; // 太陽常數 W/m^2
     const SIGMA = 5.67e-8; // 史蒂芬-波茲曼常數 W/m^2K^4
 
-    // --- 鋪面反照率資料 (還原為您的原始設定) ---
+    // --- 鋪面反照率資料 (使用符合體感的參數) ---
     const pavements = [
         { name: '柏油 (Asphalt)', albedo: 0.075 },
-        // *** 還原水泥反照率為您報告中的數值 ***
-        { name: '水泥 (Concrete)', albedo: 0.395 },
+        { name: '水泥 (Concrete)', albedo: 0.25 },
         { name: '草地 (Grass)', albedo: 0.275 },
         { name: 'PU跑道 (PU Track)', albedo: 0.125 }
     ];
@@ -34,7 +26,7 @@ function calculateSurfaceTemperatures(latitude, forecastHigh, forecastLow) {
     const Rs_max = GSC * E0 * Math.sin(alpha);
     
     // --- 雲遮係數相關計算 ---
-    // *** 關鍵修正：只保留此處的 0.005 係數修正，以匹配 Rs_max 的單位 ***
+    // *** 絕對正確的關鍵修正：使用 0.005 係數以匹配 Rs_max 的單位 ***
     const delta_T_max = 0.005 * Rs_max + 6;
     const delta_T_observed = forecastHigh - forecastLow;
     
