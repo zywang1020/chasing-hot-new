@@ -1,26 +1,19 @@
-// calculations.js (科學模型已校正的最終版)
+// calculations.js (帶有診斷訊息的最終除錯版)
 
-/**
- * 根據氣象預報資料和地理位置，計算不同鋪面的表面溫度。
- * @param {number} latitude - 緯度
- * @param {number} forecastHigh - 預報最高溫 (°C)
- * @param {number} forecastLow - 預報最低溫 (°C)
- * @returns {Array<Object>} 包含各種鋪面名稱與其估算溫度的陣列
- */
 function calculateSurfaceTemperatures(latitude, forecastHigh, forecastLow) {
-    // --- 物理常數 ---
-    const GSC = 1367; // 太陽常數 W/m^2
-    const SIGMA = 5.67e-8; // 史蒂芬-波茲曼常數 W/m^2K^4
+    console.log("--- 開始進行鋪面溫度計算 ---");
+    console.log(`輸入緯度: ${latitude}, 預報最高溫: ${forecastHigh}, 預報最低溫: ${forecastLow}`);
 
-    // --- 鋪面反照率資料 ---
+    const GSC = 1367;
+    const SIGMA = 5.67e-8;
+
     const pavements = [
         { name: '柏油 (Asphalt)', albedo: 0.075 },
-        { name: '水泥 (Concrete)', albedo: 0.395 },
+        { name: '水泥 (Concrete)', albedo: 0.25 },
         { name: '草地 (Grass)', albedo: 0.275 },
         { name: 'PU跑道 (PU Track)', albedo: 0.125 }
     ];
 
-    // --- 開始執行公式計算 ---
     const toRadians = (deg) => deg * Math.PI / 180;
     const today = new Date();
     const startOfYear = new Date(today.getFullYear(), 0, 0);
@@ -30,26 +23,30 @@ function calculateSurfaceTemperatures(latitude, forecastHigh, forecastLow) {
     const phi = toRadians(latitude);
     const alpha = toRadians(90) - Math.abs(phi - delta);
     const E0 = 1 + 0.033 * Math.cos(toRadians(360 * n / 365));
-    const Rs_max = GSC * E0 * Math.sin(alpha); // 此處單位為 W/m²
-    
-    // --- 雲遮係數相關計算 ---
-    // *** 關鍵修正：將係數從 0.3 校正為 0.005，以匹配 Rs_max 的單位 ***
+    const Rs_max = GSC * E0 * Math.sin(alpha);
+    console.log(`步驟1: 理論最大太陽輻射量 (Rs_max) = ${Rs_max.toFixed(2)} W/m²`);
+
     const delta_T_max = 0.005 * Rs_max + 6;
     const delta_T_observed = forecastHigh - forecastLow;
+    console.log(`步驟2: 理論最大溫差 (delta_T_max) = ${delta_T_max.toFixed(2)} °C`);
+    console.log(`       預報溫差 (delta_T_observed) = ${delta_T_observed.toFixed(2)} °C`);
     
     let cloudCoefficient = delta_T_observed / delta_T_max;
-    // 增加保護機制，確保雲遮係數最大為 1 (晴天)
     if (cloudCoefficient > 1) {
         cloudCoefficient = 1;
     }
+    console.log(`步驟3: 雲遮係數 (cloudCoefficient) = ${cloudCoefficient.toFixed(2)}`);
 
     const Rs_observed = Rs_max * cloudCoefficient;
+    console.log(`步驟4: 實際太陽入射輻射量 (Rs_observed) = ${Rs_observed.toFixed(2)} W/m²`);
     
-    // --- 公式5: 為每種鋪面計算表面溫度 ---
+    console.log("--- 步驟5: 計算各種鋪面溫度 ---");
     return pavements.map(pavement => {
         const emissivity = 1 - pavement.albedo;
         const T_kelvin = Math.pow((emissivity * Rs_observed) / SIGMA, 0.25);
         const T_celsius = T_kelvin - 273.15;
+        
+        console.log(`  - ${pavement.name}: 計算出的攝氏溫度 = ${T_celsius.toFixed(2)} °C`);
         
         return {
             name: pavement.name,
