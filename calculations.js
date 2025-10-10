@@ -1,13 +1,21 @@
-// calculations.js (最終校驗版)
+// calculations.js (最終科學化校正版)
 
+/**
+ * 根據氣象預報資料和地理位置，計算不同鋪面的表面溫度。
+ * @param {number} latitude - 緯度
+ * @param {number} forecastHigh - 預報最高溫 (°C)
+ * @param {number} forecastLow - 預報最低溫 (°C)
+ * @returns {Array<Object>} 包含各種鋪面名稱與其估算溫度的陣列
+ */
 function calculateSurfaceTemperatures(latitude, forecastHigh, forecastLow) {
     // --- 物理常數 ---
     const GSC = 1367; // 太陽常數 W/m^2
     const SIGMA = 5.67e-8; // 史蒂芬-波茲曼常數 W/m^2K^4
 
-    // --- 鋪面反照率資料 (使用符合體感的參數) ---
+    // --- 鋪面反照率資料 (使用具科學根據的參數) ---
     const pavements = [
         { name: '柏油 (Asphalt)', albedo: 0.075 },
+        // 使用 0.25 代表更常見的「風化後都市水泥」
         { name: '水泥 (Concrete)', albedo: 0.25 },
         { name: '草地 (Grass)', albedo: 0.275 },
         { name: 'PU跑道 (PU Track)', albedo: 0.125 }
